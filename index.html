@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sistema de Gestión de Turnos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root { /* Paleta y estados */
+      --primary: #667eea; --primary-dark: #764ba2;
+      --caja: #FF8A00; --apoyo: #11998E; --cocina: #4FACFE; --panadero: #A855F7; --aseo: #EC4899;
+      --descanso-rem: #10B981; --descanso-norem: #EF4444; --vacaciones: #F59E0B; --incapacidad: #6366F1;
+      --bloqueado:#94A3B8; --bg:#f7f7fb; --card:#ffffff; --muted:#6b7280; --text:#111827;
+    }
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui;background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:var(--text)}
+    .app{max-width:1400px;margin:0 auto;padding:18px}
+    .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .title{color:#fff;font-weight:700;letter-spacing:.3px}
+    .actions{display:flex;gap:8px}
+    .btn{border:none;border-radius:10px;padding:10px 12px;background:#fff;color:#111;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.12);display:inline-flex;gap:8px;align-items:center}
+    .layout{display:grid;grid-template-columns:300px 1fr 320px;gap:12px}
+    .card{background:var(--card);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.1)}
+    .panel{padding:16px}
+    .panel h2{margin:0 0 10px;font-size:18px}
+    .legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+    .legend .badge{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+    .color{width:22px;height:14px;border-radius:4px}
+    .employee{display:flex;align-items:center;justify-content:space-between;padding:10px;border-radius:12px;margin:7px 0;color:#fff}
+    .employee[draggable="true"]{cursor:grab}
+    .employee .info{display:flex;align-items:center;gap:8px}
+    .employee.small{opacity:.7;font-size:13px}
+    .employee.blocked{filter:grayscale(.5);opacity:.5}
+    .list{max-height:60vh;overflow:auto;padding-right:8px}
+    .list::-webkit-scrollbar{width:6px} .list::-webkit-scrollbar-thumb{background:#ddd;border-radius:8px}
+    .calendar .week{display:grid;gap:10px}
+    .day{background:#f8f9fb;border-radius:12px;overflow:hidden;border:1px solid #eee}
+    .day-head{background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;padding:10px 12px;font-weight:600;display:flex;justify-content:space-between}
+    .slots{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#e5e7eb}
+    .slot{background:#fff;min-height:120px;padding:10px}
+    .slot.drag{background:#eaf3ff;border:2px dashed #58a;}
+    .slot .slot-title{font-weight:600;color:#374151;margin-bottom:6px}
+    .assigned{border-radius:10px;padding:8px 10px;margin:6px 0;color:#fff;display:flex;justify-content:space-between;align-items:center}
+    .novedades .group{margin:10px 0}
+    .drop-nov{border:1px dashed #ddd;border-radius:12px;padding:12px;min-height:80px}
+    .label{font-size:12px;color:var(--muted);margin-bottom:6px}
+    .footer{display:flex;gap:10px;margin-top:10px}
+    .hint{color:#fff;opacity:.85;font-size:12px;margin-top:8px}
+    /* Modals */
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;padding:16px}
+    .modal .box{background:#fff;border-radius:16px;min-width:320px;width:min(90vw,720px);max-height:80vh;padding:16px;display:flex;flex-direction:column}
+    #modalBody{overflow:auto;margin:8px 0;padding-right:8px}
+    .row{display:flex;gap:10px;margin:8px 0;flex-wrap:wrap}
+    input,select,textarea{width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px}
+    .box h3{margin:0 0 12px;font-size:18px} .box .actions{justify-content:flex-end;gap:8px;position:sticky;bottom:0;background:#fff;padding-top:8px}
+    .week-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+    .badge{background:#111827;color:#fff;border-radius:12px;padding:2px 8px;font-size:12px}
+    .rem{background:var(--descanso-rem)} .nrem{background:var(--descanso-norem)} .vac{background:var(--vacaciones)} .inc{background:var(--incapacidad)}
+    .caja{background:var(--caja)} .apoyo{background:var(--apoyo)} .cocina{background:var(--cocina)} .panadero{background:var(--panadero)} .aseo{background:var(--aseo)}
+    /* Menú contextual */
+    .ctxmenu{position:fixed;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.12);padding:6px;display:none;z-index:1000;min-width:160px}
+    .ctxmenu button{display:block;width:100%;text-align:left;border:none;background:transparent;padding:8px 12px;cursor:pointer;border-radius:8px}
+    .ctxmenu button:hover{background:#f3f4f6}
+    .ctxmenu .danger{color:#dc2626}
+    .ctxmenu .warn{color:#b45309}
+    .ctxmenu button[disabled]{opacity:.5;cursor:not-allowed}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+       <div class="title" id="appTitle">SISTEMA DE GESTIÓN DE TURNOS — Panadería XYZ</div>
+       <div class="actions">
+         <button class="btn" id="btnExport"><i class="fa-solid fa-file-excel"></i> Exportar</button>
+          <button class="btn" id="btnExportJSON"><i class="fa-solid fa-file-export"></i> Exportar JSON</button>
+          <button class="btn" id="btnImportJSON"><i class="fa-solid fa-file-import"></i> Importar JSON</button>
+          <button class="btn" id="btnConfig"><i class="fa-solid fa-gear"></i> Configuración</button>
+          <button class="btn" id="btnSave"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
+          <input type="file" id="importJSONInput" accept="application/json" style="display:none"/>
+       </div>
+     </div>
+    <div class="layout">
+      <!-- Panel Empleados -->
+      <div class="card panel">
+        <h2>👤 Empleados</h2>
+        <button class="btn" id="btnNuevo"><i class="fa-solid fa-user-plus"></i> Nuevo</button>
+        <div class="legend" id="legendCargos"></div>
+        <div class="list" id="listaEmpleados"></div>
+        <div class="hint">Arrastre un empleado al calendario o a una novedad.</div>
+      </div>
+      <!-- Panel Calendario -->
+      <div class="card panel">
+        <h2>📅 Semana <span id="weekLabel"></span></h2>
+        <div class="week-tools">
+          <button class="btn" id="prevWeek"><i class="fa-solid fa-chevron-left"></i> Semana anterior</button>
+          <button class="btn" id="goToday"><i class="fa-solid fa-calendar-day"></i> Ir a esta semana</button>
+          <button class="btn" id="nextWeek">Semana siguiente <i class="fa-solid fa-chevron-right"></i></button>
+          <input type="date" id="weekDate"/>
+          <span class="small" id="weekRange"></span>
+          <span class="badge" id="weekBadge" style="display:none">Actual</span>
+        </div>
+        <div class="calendar">
+          <div class="week" id="calendario"></div>
+        </div>
+        <div class="footer">
+          <span class="label" id="alerts"></span>
+        </div>
+      </div>
+      <!-- Panel Novedades -->
+      <div class="card panel novedades">
+        <h2>🗂️ Novedades</h2>
+        <div class="group">
+          <div class="label">✅ Descanso Remunerado</div>
+          <div class="drop-nov" data-tipo="descanso-remunerado"></div>
+        </div>
+        <div class="group">
+          <div class="label">❌ Descanso No Remunerado</div>
+          <div class="drop-nov" data-tipo="descanso-no-remunerado"></div>
+        </div>
+        <div class="group">
+          <div class="label">🏖️ Vacaciones</div>
+          <div class="drop-nov" data-tipo="vacaciones"></div>
+        </div>
+        <div class="group">
+          <div class="label">🏥 Incapacidad</div>
+          <div class="drop-nov" data-tipo="incapacidad"></div>
+        </div>
+        <h3 style="margin-top:12px">Historial</h3>
+        <div class="list" id="historial"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal genérico -->
+  <div class="modal" id="modal">
+    <div class="box">
+      <h3 id="modalTitle"></h3>
+      <div id="modalBody"></div>
+      <div class="actions">
+        <button class="btn" id="modalCancel">Cancelar</button>
+        <button class="btn" id="modalOk">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="ctxMenu" class="ctxmenu">
+    <button data-action="edit">Editar</button>
+    <button data-action="novedad">Agregar novedad</button>
+    <button data-action="edit-nov">Editar novedad activa</button>
+    <button data-action="del-nov" class="danger">Eliminar novedad activa</button>
+    <button data-action="block" class="warn">Bloquear</button>
+    <button data-action="delete" class="danger">Eliminar</button>
+  </div>
+
+  <script>
+  const LS_KEY = 'turnos_state_v1';
+  const hoy = new Date();
+  hoy.setHours(0,0,0,0);
+  function getWeekKey(d){ const dd=new Date(d); dd.setHours(0,0,0,0); const onejan=new Date(dd.getFullYear(),0,1); const millis = dd-onejan; const week=Math.ceil((millis/86400000 + onejan.getDay()+1)/7); return `${dd.getFullYear()}-W${week}`; }
+  function getWeekBounds(d){ const dd=new Date(d); dd.setHours(0,0,0,0); const monday=new Date(dd); monday.setDate(dd.getDate() - ((dd.getDay()+6)%7)); const sunday=new Date(monday); sunday.setDate(monday.getDate()+6); return {monday,sunday}; }
+  const semanaEnCurso = getWeekKey(hoy);
+  let fechaReferencia = new Date(hoy);
+  let semanaMostrada = getWeekKey(fechaReferencia);
+  const defaults = {
+    config:{am:['05:00','13:00'], pm:['13:00','21:00'], descansoCiclo:15, empresa:{nombre:'Panadería XYZ', logo:null}, roles:[
+      {id:'caja',label:'Caja',color:'#FF8A00',exception:false},
+      {id:'apoyo',label:'Apoyo/Domicilios',color:'#11998E',exception:false},
+      {id:'cocina',label:'Cocina',color:'#4FACFE',exception:false},
+      {id:'panadero',label:'Panadero',color:'#A855F7',exception:true},
+      {id:'aseo',label:'Aseo',color:'#EC4899',exception:false},
+    ], required:{manana:{panadero:2}, tarde:{panadero:1}}},
+    employees:[
+      {id:'E1', nombre:'ALEJANDRA', cedula:'', cargo:'caja', multicargo:false, extras:[]},
+      {id:'E2', nombre:'ESTEFANIA', cedula:'', cargo:'cocina', multicargo:false, extras:[]},
+      {id:'E3', nombre:'MONICA', cedula:'', cargo:'apoyo', multicargo:false, extras:[]},
+      {id:'E4', nombre:'YAMILETH', cedula:'', cargo:'apoyo', multicargo:false, extras:[]},
+      {id:'E5', nombre:'GYANNELLA', cedula:'', cargo:'cocina', multicargo:false, extras:[]},
+      {id:'E6', nombre:'RICARDO', cedula:'', cargo:'apoyo', multicargo:false, extras:[]},
+      {id:'E7', nombre:'YURANI', cedula:'', cargo:'apoyo', multicargo:false, extras:[]},
+      {id:'E8', nombre:'DIANA', cedula:'', cargo:'cocina', multicargo:false, extras:[]},
+    ],
+    novedades:[],
+    blocked:[],
+    schedule:{},
+    ultimoDescanso:{}
+  };
+  let state = JSON.parse(localStorage.getItem(LS_KEY) || 'null') || defaults;
+  if(!state.schedule[semanaMostrada]) state.schedule[semanaMostrada] = baseSemana();
+  if(!state.blocked) state.blocked=[];
+  if(!state.config.roles) state.config.roles = defaults.config.roles.map(r=>({id:r.id,label:r.label,color:r.color,exception:!!r.exception}));
+  state.config.roles = (state.config.roles||[]).map(r=>({id:r.id,label:r.label,color:r.color,exception:!!r.exception}));
+  if(!state.config.required) state.config.required = defaults.config.required;
+
+  function baseSemana(){
+    const dias = ['lunes','martes','miercoles','jueves','viernes','sabado','domingo'];
+    const obj={}; dias.forEach(d=>{obj[d]={manana:[], tarde:[]}}); return obj;
+  }
+  function save(){ localStorage.setItem(LS_KEY, JSON.stringify(state)); notify('Cambios guardados'); }
+  function autosave(){ setInterval(()=>save(), 30000); }
+  function notify(msg){ const a=document.getElementById('alerts'); a.textContent=msg; setTimeout(()=>a.textContent='',3000); }
+
+  // Render
+  function ensureRoleStyles(){
+    let style=document.getElementById('roleStyles'); if(!style){ style=document.createElement('style'); style.id='roleStyles'; document.head.appendChild(style); }
+    const css = (state.config.roles||[]).map(r=>`.color.${r.id}{background:${r.color}} .assigned.${r.id}{background:${r.color}} .employee.${r.id}{background:${r.color}}`).join(' ');
+    style.textContent = css;
+  }
+  function renderLegend(){
+     const cont=document.getElementById('legendCargos'); if(!cont) return; cont.innerHTML = (state.config.roles||[]).map(r=>`<div class='badge'><span class='color ${r.id}'></span> ${r.label}</div>`).join('');
+   }
+   function renderTitle(){
+     const el=document.getElementById('appTitle'); if(!el) return;
+     const name=(state.config?.empresa?.nombre || defaults.config.empresa.nombre);
+     el.textContent = `SISTEMA DE GESTIÓN DE TURNOS — ${name}`;
+   }
+  function renderWeekLabel(){
+  const k = semanaMostrada;
+  const weekNum = parseInt(k.split('-W')[1],10);
+  const year = k.split('-W')[0];
+  const bounds = getWeekBounds(fechaReferencia);
+  const fmt = d=> d.toLocaleDateString();
+  document.getElementById('weekLabel').textContent = `W${weekNum} (${year})`;
+  const rangeEl = document.getElementById('weekRange'); if(rangeEl) rangeEl.textContent = `Del ${fmt(bounds.monday)} al ${fmt(bounds.sunday)}`;
+  const badge = document.getElementById('weekBadge'); if(badge) badge.style.display = (semanaMostrada===semanaEnCurso) ? 'inline-block' : 'none';
+  const dateInput = document.getElementById('weekDate'); if(dateInput){ const yyyy=bounds.monday.getFullYear(); const mm=String(bounds.monday.getMonth()+1).padStart(2,'0'); const dd=String(bounds.monday.getDate()).padStart(2,'0'); dateInput.value = `${yyyy}-${mm}-${dd}`; }
+}
+   function renderEmployees(){
+     const cont = document.getElementById('listaEmpleados'); cont.innerHTML='';
+     state.employees.forEach(e=>{
+       const el=document.createElement('div'); el.className=`employee ${e.cargo}${isBlocked(e.id)?' blocked':''}`; el.draggable=!isBlocked(e.id);
+       el.dataset.id=e.id; el.dataset.cargo=e.cargo; el.innerHTML=`<div class="info"><strong>${e.nombre}</strong><span class="small">${e.multicargo?'· multi':''}</span></div><span class="small">${e.cedula||''}</span>`;
+       el.addEventListener('dragstart', ev=>{ev.dataTransfer.setData('text/plain', e.id);});
+       el.addEventListener('contextmenu', ev=>{ev.preventDefault(); showCtxMenu(e.id, ev.clientX, ev.clientY);});
+       cont.appendChild(el);
+     });
+   }
+  function renderCalendar(){
+    const cal = document.getElementById('calendario'); cal.innerHTML='';
+    const dias = [['lunes','Lun'],['martes','Mar'],['miercoles','Mié'],['jueves','Jue'],['viernes','Vie'],['sabado','Sáb'],['domingo','Dom']];
+    dias.forEach(([key,label])=>{
+      const day=document.createElement('div'); day.className='day';
+      day.innerHTML = `<div class="day-head"><span>${label}</span><span class="small">${state.config.am[0]}-${state.config.am[1]} / ${state.config.pm[0]}-${state.config.pm[1]}</span></div>`;
+      const slots=document.createElement('div'); slots.className='slots';
+      slots.appendChild(slotEl(key,'manana','🌅 Mañana'));
+      slots.appendChild(slotEl(key,'tarde','🌆 Tarde'));
+      day.appendChild(slots); cal.appendChild(day);
+    });
+  }
+  function slotEl(dia, turno, titulo){
+    const el=document.createElement('div'); el.className='slot'; el.dataset.day=dia; el.dataset.shift=turno; el.innerHTML = `<div class="slot-title">${titulo}</div>`;
+    el.addEventListener('dragover', ev=>{ev.preventDefault(); el.classList.add('drag')});
+    el.addEventListener('dragleave', ()=>el.classList.remove('drag'));
+    el.addEventListener('drop', ev=>{ev.preventDefault(); el.classList.remove('drag'); const id=ev.dataTransfer.getData('text/plain'); if(!id) return; tryAssignToShift(id, dia, turno); });
+    // Pintar asignados
+    const asignados = state.schedule[semanaMostrada][dia][turno]; asignados.forEach(a=> el.appendChild(assignedChip(a, dia, turno)));
+    return el;
+  }
+  function assignedChip(a, dia, turno){
+    const chip=document.createElement('div'); chip.className=`assigned ${a.cargo}`; chip.innerHTML=`<span>${empById(a.id).nombre}</span><button class="btn" style="padding:4px 8px" aria-label="Quitar">×</button>`;
+    chip.querySelector('button').onclick = ()=>{ removeAssign(a.id, dia, turno); };
+    chip.draggable=true; chip.addEventListener('dragstart', ev=>{ ev.dataTransfer.setData('text/plain', a.id); });
+    return chip;
+  }
+
+  // Utilidades y validaciones
+  function empById(id){ return state.employees.find(x=>x.id===id); }
+  function roleById(id){ return (state.config.roles||[]).find(r=>r.id===id); }
+  function isBlocked(id){ const now=hoy; const novActiva = state.novedades.some(n=> n.id===id && new Date(n.inicio)<=now && now<=new Date(n.fin)); const manual = (state.blocked||[]).includes(id); return novActiva || manual; }
+  function countShift(dia, turno){ return state.schedule[semanaMostrada][dia][turno].length; }
+  function countRole(dia, turno, cargo){ return state.schedule[semanaMostrada][dia][turno].filter(a=>a.cargo===cargo).length; }
+  function tryAssignToShift(id, dia, turno){
+    const emp=empById(id); if(!emp) return;
+    if(isBlocked(id)) return notify('Empleado bloqueado por novedad activa');
+    const max = turno==='manana'?4:3; if(countShift(dia,turno)>=max) return notify(`Máximo ${max} empleados en turno ${turno==='manana'?'mañana':'tarde'}`);
+    let cargo=emp.cargo;
+    if(emp.multicargo){ openCargoModal(emp, c=>{ cargo=c; doAssign(); }); } else { doAssign(); }
+    function doAssign(){
+      if(isAlreadyAssigned(id,dia,turno)) return notify('Ya está asignado en este turno');
+      const other = turno==='manana'?'tarde':'manana';
+      const existing = state.schedule[semanaMostrada][dia][other].find(a=>a.id===id);
+      if(existing){
+        const excNew = !!roleById(cargo)?.exception;
+        const excExisting = !!roleById(existing.cargo)?.exception;
+        if(!(excNew || excExisting)) return notify('No puede trabajar mañana y tarde el mismo día (solo excepciones)');
+      }
+      state.schedule[semanaMostrada][dia][turno].push({id, cargo}); save(); renderCalendar(); checkCriticalRoles(dia,turno);
+    }
+  }
+  function isAlreadyAssigned(id,dia,turno){ return state.schedule[semanaMostrada][dia][turno].some(a=>a.id===id); }
+  function removeAssign(id,dia,turno){ const arr=state.schedule[semanaMostrada][dia][turno]; const i=arr.findIndex(a=>a.id===id); if(i>-1){arr.splice(i,1); save(); renderCalendar();}}
+  function checkCriticalRoles(dia,turno){
+    const req = (state.config.required && state.config.required[turno]) || {};
+    const faltantes = Object.entries(req).map(([role, n])=>{
+      const faltan = Math.max(0, (parseInt(n||'0',10)||0) - countRole(dia, turno, role));
+      return faltan>0 ? `${roleById(role)?.label||role}: ${faltan}` : null;
+    }).filter(Boolean);
+    if(faltantes.length) notify('Faltan ' + faltantes.join(', ') + ` en ${turno==='manana'?'mañana':'tarde'}`);
+  }
+
+  // Novedades
+  function renderNovedadesDrop(){ document.querySelectorAll('.drop-nov').forEach(el=>{
+    el.addEventListener('dragover', ev=>{ev.preventDefault(); el.classList.add('drag')});
+    el.addEventListener('dragleave', ()=>el.classList.remove('drag'));
+    el.addEventListener('drop', ev=>{ev.preventDefault(); el.classList.remove('drag'); const id=ev.dataTransfer.getData('text/plain'); const tipo=el.dataset.tipo; openNovedadModal(empById(id), tipo); });
+  }); }
+  function openNovedadModal(emp, tipo){ if(!emp) return; showModal('Registrar novedad', `
+      <div class='row'><input type='date' id='novInicio'/><input type='date' id='novFin'/></div>
+      <div class='row'><textarea id='novObs' placeholder='Observaciones...'></textarea></div>
+      <div class='row'>${tipo.includes('descanso')?"<label><input type='checkbox' id='novPagado' checked> Pagado</label>":''}</div>
+      <div class='row small'>Empleado: <strong>${emp.nombre}</strong> — Tipo: ${tipo}</div>
+    `, ()=>{
+      const inicio=document.getElementById('novInicio').value; const fin=document.getElementById('novFin').value; const obs=document.getElementById('novObs').value; const pagado=document.getElementById('novPagado')?.checked||false; if(!inicio||!fin){notify('Fechas requeridas'); return false;}
+      // Bloqueo inteligente: desasignar turnos del período (semana mostrada)
+       Object.keys(state.schedule[semanaMostrada]).forEach(d=>{ ['manana','tarde'].forEach(t=>{ state.schedule[semanaMostrada][d][t]=state.schedule[semanaMostrada][d][t].filter(a=>a.id!==emp.id); })});
+       state.novedades.push({id:emp.id, tipo, inicio, fin, obs, pagado});
+       save(); renderCalendar(); renderHistorial(); renderEmployees(); return true;
+    }); }
+  function renderHistorial(){
+    const h=document.getElementById('historial'); h.innerHTML='';
+    state.novedades.slice().reverse().forEach(n=>{
+      const e=empById(n.id);
+      const item=document.createElement('div'); item.className='employee small'; item.style.background = tipoColor(n.tipo);
+      const idx = state.novedades.indexOf(n);
+      item.innerHTML=`<div class='info'><strong>${e?.nombre||n.id}</strong> <span class='small'>${n.tipo}</span></div>
+        <span>${fmtFecha(n.inicio)} → ${fmtFecha(n.fin)}</span>
+        <div class='actions'><button class='btn' data-action='edit'>Editar</button><button class='btn' data-action='delete'>Eliminar</button></div>`;
+      item.querySelector('[data-action="edit"]').onclick=()=>openEditNovedadIdx(idx);
+      item.querySelector('[data-action="delete"]').onclick=()=>deleteNovedadIdx(idx);
+      h.appendChild(item);
+    });
+  }
+  function tipoColor(tipo){ switch(tipo){ case 'descanso-remunerado':return 'var(--descanso-rem)'; case 'descanso-no-remunerado':return 'var(--descanso-norem)'; case 'vacaciones':return 'var(--vacaciones)'; case 'incapacidad':return 'var(--incapacidad)'; default:return '#999'; } }
+  function fmtFecha(s){ const d=new Date(s); return d.toLocaleDateString(); }
+
+  // Modales
+  const modal=document.getElementById('modal'); const modalTitle=document.getElementById('modalTitle'); const modalBody=document.getElementById('modalBody'); const modalCancel=document.getElementById('modalCancel'); const modalOk=document.getElementById('modalOk');
+  function showModal(title, html, onOk){ modalTitle.textContent=title; modalBody.innerHTML=html; modal.style.display='flex'; modalCancel.onclick=()=>{ modal.style.display='none'; }; modalOk.onclick=()=>{ const ok=onOk?.(); if(ok!==false) modal.style.display='none'; } }
+  function openCargoModal(emp, cb){ const opts=(state.config.roles||[]).map(r=>`<option value='${r.id}'>${r.label}</option>`).join(''); showModal(`¿Qué cargo asignar a ${emp.nombre}?`, `<select id='selCargo'>${opts}</select>`, ()=>{ const c=document.getElementById('selCargo').value; cb(c); return true; }); }
+
+  // Registro de empleado
+  document.getElementById('btnNuevo').onclick = ()=>{
+    const opts=(state.config.roles||[]).map(r=>`<option value='${r.id}'>${r.label}</option>`).join('');
+    showModal('Registro de empleado', `
+      <div class='row'><input id='rNombre' placeholder='Nombre completo'/></div>
+      <div class='row'><input id='rCedula' placeholder='Cédula'/></div>
+      <div class='row'><label><input type='checkbox' id='rMulti'/> Multi-cargo</label></div>
+      <div class='row'><select id='rCargo'>${opts}</select></div>
+    `, ()=>{
+      const nombre=rNombre.value.trim(); if(!nombre) {notify('Nombre requerido'); return false;}
+      const id='E'+(Math.random().toString(36).slice(2,8)).toUpperCase();
+      state.employees.push({id, nombre, cedula:rCedula.value.trim(), cargo:rCargo.value, multicargo: rMulti.checked, extras:[]}); save(); renderEmployees(); return true;
+    });
+  };
+
+  // Configuración y respaldo
+  document.getElementById('btnConfig').onclick = ()=>{
+    function getReq(turno,id){ return ((state.config.required||{})[turno]||{})[id]||0; }
+    const rowsHtml = (state.config.roles||[]).map(r=>`
+      <div class='row role-row' data-id='${r.id}'>
+        <input class='roleName' value='${r.label}'/>
+        <input class='roleColor' type='color' value='${r.color}'/>
+        <label><input type='checkbox' class='roleException' ${r.exception?'checked':''}/> Excepción (permite doble turno)</label>
+        <span class='small'>Req. mañana</span><input class='reqAm' type='number' min='0' value='${getReq('manana',r.id)}'/>
+        <span class='small'>Req. tarde</span><input class='reqPm' type='number' min='0' value='${getReq('tarde',r.id)}'/>
+        <button class='btn' data-del='${r.id}'>Eliminar</button>
+      </div>`).join('');
+    showModal('Configuración', `
+      <div class='row'><span>Turno Mañana</span><input id='amIni' value='${state.config.am[0]}'/><input id='amFin' value='${state.config.am[1]}'/></div>
+      <div class='row'><span>Turno Tarde</span><input id='pmIni' value='${state.config.pm[0]}'/><input id='pmFin' value='${state.config.pm[1]}'/></div>
+      <div class='row'><span>Ciclo descansos (días)</span><input id='ciclo' type='number' value='${state.config.descansoCiclo}'/></div>
+      <div class='row'><span>Empresa</span><input id='empresa' value='${state.config.empresa.nombre}'/></div>
+      <hr/>
+      <h4>Gestión de cargos</h4>
+      <div id='rolesEditor'>
+        ${rowsHtml}
+        <div class='row'><button class='btn' id='addRole'>+ Agregar cargo</button></div>
+      </div>
+      <div class='row'><button class='btn' id='btnBackup'>📁 Hacer respaldo</button><input type='file' id='fileRestore'/></div>
+    `, ()=>{
+      state.config.am=[amIni.value,amFin.value];
+      state.config.pm=[pmIni.value,pmFin.value];
+      state.config.descansoCiclo=parseInt(ciclo.value||'15',10);
+      state.config.empresa.nombre=empresa.value;
+
+      const rows = Array.from(document.querySelectorAll('#rolesEditor .role-row'));
+      const currentIds = new Set();
+      function slugify(s){ return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''); }
+      function roleInUse(id){
+        if(state.employees.some(e=>e.cargo===id)) return true;
+        return Object.keys(state.schedule).some(sem=> Object.keys(state.schedule[sem]).some(d=> ['manana','tarde'].some(t=> state.schedule[sem][d][t].some(a=>a.cargo===id))));
+      }
+      const roles=[]; const required={manana:{},tarde:{}};
+      rows.forEach(row=>{
+        if(row.dataset.deleted==='1') return;
+        const id=row.dataset.id||'';
+        const name=row.querySelector('.roleName').value.trim();
+        const color=row.querySelector('.roleColor').value || '#888888';
+        const exception=row.querySelector('.roleException')?.checked||false;
+        const reqAm=parseInt(row.querySelector('.reqAm')?.value||'0',10)||0;
+        const reqPm=parseInt(row.querySelector('.reqPm')?.value||'0',10)||0;
+        if(!name) return;
+        if(!id){
+          let base=slugify(name)||'cargo';
+          let nid=base, c=1;
+          while(state.config.roles.some(r=>r.id===nid) || currentIds.has(nid)){ nid=base+'-'+c++; }
+          roles.push({id:nid,label:name,color,exception});
+          currentIds.add(nid);
+          if(reqAm>0) required.manana[nid]=reqAm; if(reqPm>0) required.tarde[nid]=reqPm;
+        }else{
+          roles.push({id,label:name,color,exception});
+          currentIds.add(id);
+          if(reqAm>0) required.manana[id]=reqAm; if(reqPm>0) required.tarde[id]=reqPm;
+        }
+      });
+      const deleted = (state.config.roles||[]).filter(r=> !roles.some(nr=>nr.id===r.id));
+      for(const r of deleted){
+        if(roleInUse(r.id)){ notify(`No se puede eliminar cargo en uso: ${r.label}`); return false; }
+      }
+      state.config.roles = roles;
+      state.config.required = required;
+      save();
+       ensureRoleStyles(); renderLegend(); renderEmployees(); renderCalendar(); renderTitle();
+       return true;
+    });
+    // Previsualización en tiempo real de colores sin guardar
+    setTimeout(()=>{
+      const editor=document.getElementById('rolesEditor');
+      function previewRoleStylesFromEditor(){
+        let css='';
+        const rows=Array.from(editor.querySelectorAll('.role-row')).filter(r=>r.dataset.deleted!=='1');
+        rows.forEach(row=>{
+          const id=row.dataset.id; if(!id) return; // solo roles existentes para previsualización
+          const color=row.querySelector('.roleColor')?.value||'#888888';
+          css += `.color.${id}{background:${color}} .assigned.${id}{background:${color}} .employee.${id}{background:${color}} `;
+        });
+        let style=document.getElementById('roleStyles'); if(!style){ style=document.createElement('style'); style.id='roleStyles'; document.head.appendChild(style); }
+        style.textContent=css;
+      }
+      editor.querySelectorAll('.roleColor').forEach(inp=>{ inp.addEventListener('input', previewRoleStylesFromEditor); });
+      // Revertir al cancelar
+      const cancelBtn=document.getElementById('modalCancel');
+      if(cancelBtn){ cancelBtn.onclick=()=>{ document.getElementById('modal').style.display='none'; ensureRoleStyles(); renderLegend(); renderEmployees(); renderCalendar(); }; }
+    },0);
+  };
+  function downloadJSON(name, obj){ const a=document.createElement('a'); a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(obj)); a.download=name; a.click(); }
+  function restoreJSON(e){
+    const f=e.target.files[0]; if(!f) return; const rdr=new FileReader();
+    rdr.onload=()=>{
+      try{
+        state=JSON.parse(rdr.result);
+        if(!state.schedule[semanaMostrada]) state.schedule[semanaMostrada]=baseSemana();
+        if(!state.blocked) state.blocked=[];
+        if(!state.config) state.config = defaults.config;
+        if(!state.config.roles) state.config.roles = defaults.config.roles.map(r=>({id:r.id,label:r.label,color:r.color,exception:!!r.exception}));
+        state.config.roles = (state.config.roles||[]).map(r=>({id:r.id,label:r.label,color:r.color,exception:!!r.exception}));
+        if(!state.config.required) state.config.required = defaults.config.required;
+        save(); ensureRoleStyles(); renderLegend(); renderAll();
+      }catch(err){ notify('Archivo inválido'); }
+    };
+    rdr.readAsText(f);
+  }
+
+  // Exportar Excel
+  document.getElementById('btnExport').onclick = ()=>{
+    try{ const wb=XLSX.utils.book_new();
+      const turnosSheet = buildTurnosSheet(); XLSX.utils.book_append_sheet(wb, turnosSheet, 'Turnos Semanales');
+      const novSheet = buildNovSheet(); XLSX.utils.book_append_sheet(wb, novSheet, 'Novedades');
+      const resSheet = buildResumenSheet(); XLSX.utils.book_append_sheet(wb, resSheet, 'Resumen');
+      XLSX.writeFile(wb, `Programacion-${semanaMostrada}.xlsx`); notify('Excel generado');
+    }catch(e){ console.error(e); notify('No se pudo generar Excel'); }
+  };
+  function buildTurnosSheet(){
+    const dias=['lunes','martes','miercoles','jueves','viernes','sabado','domingo'];
+    const header=['Empleado','Cédula',...dias.map(d=>d.toUpperCase())]; const rows=[header];
+    state.employees.forEach(emp=>{
+      const row=[emp.nombre, emp.cedula]; dias.forEach(d=>{
+        const am=state.schedule[semanaMostrada][d].manana.find(a=>a.id===emp.id); const pm=state.schedule[semanaMostrada][d].tarde.find(a=>a.id===emp.id);
+        let val=''; if(am) val+='AM-'+am.cargo.toUpperCase(); if(pm) val+=(val?' / ':'')+'PM-'+pm.cargo.toUpperCase();
+        const nov=state.novedades.find(n=>n.id===emp.id && dayInRange(d,n)); if(nov) val=nov.tipo.toUpperCase(); row.push(val);
+      }); rows.push(row);
+    }); return XLSX.utils.aoa_to_sheet(rows);
+  }
+  function dayInRange(dia, n){ return true; /* simplificado: semana actual cubre */ }
+  function buildNovSheet(){ const header=['Empleado','Tipo','Inicio','Fin','Observaciones']; const rows=[header]; state.novedades.forEach(n=>{ const e=empById(n.id); rows.push([e?.nombre||n.id, n.tipo, n.inicio, n.fin, n.obs||'']); }); return XLSX.utils.aoa_to_sheet(rows); }
+  function buildResumenSheet(){ const header=['Empleado','Días trabajados','Horas estimadas']; const rows=[header]; state.employees.forEach(e=>{ let dias=0; Object.keys(state.schedule[semanaMostrada]).forEach(d=>{ const am=state.schedule[semanaMostrada][d].manana.some(a=>a.id===e.id); const pm=state.schedule[semanaMostrada][d].tarde.some(a=>a.id===e.id); if(am||pm) dias++; }); const hrs=dias*8; rows.push([e.nombre,dias,hrs]); }); return XLSX.utils.aoa_to_sheet(rows); }
+
+  // Guardar manual
+   document.getElementById('btnSave').onclick = save;
+   // Exportar/Importar JSON del estado completo
+   document.getElementById('btnExportJSON').onclick = ()=>downloadJSON('Respaldo-Turnos.json', state);
+   document.getElementById('btnImportJSON').onclick = ()=>{
+     const inp=document.getElementById('importJSONInput');
+     if(inp){ inp.value=''; inp.click(); }
+   };
+   document.getElementById('importJSONInput').onchange = (e)=>restoreJSON(e);
+
+  function renderAll(){ renderTitle(); renderWeekLabel(); ensureRoleStyles(); renderLegend(); renderEmployees(); renderCalendar(); renderNovedadesDrop(); renderHistorial(); }
+  // Menú contextual (click derecho)
+  let ctxMenuEl=null, ctxTargetId=null;
+  function initCtxMenu(){
+    ctxMenuEl = document.getElementById('ctxMenu');
+    document.addEventListener('click', hideCtxMenu);
+    window.addEventListener('scroll', hideCtxMenu, true);
+    ctxMenuEl.addEventListener('click', (ev)=>{
+      const btn = ev.target.closest('button');
+      if(!btn) return;
+      const action = btn.dataset.action;
+      if(action==='edit') openEditEmployee(ctxTargetId);
+      if(action==='novedad') openNuevaNovedad(ctxTargetId);
+      if(action==='edit-nov'){ const idx=getActiveNovIndex(ctxTargetId); openEditNovedadIdx(idx); }
+      if(action==='del-nov'){ const idx=getActiveNovIndex(ctxTargetId); deleteNovedadIdx(idx); }
+      if(action==='block') toggleBlock(ctxTargetId);
+      if(action==='delete') confirmDeleteEmployee(ctxTargetId);
+      hideCtxMenu();
+    });
+  }
+  function showCtxMenu(id, x, y){
+    ctxTargetId = id;
+    ctxMenuEl.style.display='block';
+    const btnBlock = ctxMenuEl.querySelector('[data-action="block"]');
+    if(btnBlock){ btnBlock.textContent = (state.blocked||[]).includes(id) ? 'Desbloquear' : 'Bloquear'; }
+    const idx=getActiveNovIndex(id);
+    const btnEditNov = ctxMenuEl.querySelector('[data-action="edit-nov"]');
+    const btnDelNov = ctxMenuEl.querySelector('[data-action="del-nov"]');
+    if(btnEditNov) btnEditNov.disabled = idx<0;
+    if(btnDelNov) btnDelNov.disabled = idx<0;
+    // Evitar que se salga de la pantalla
+    const w=ctxMenuEl.offsetWidth, h=ctxMenuEl.offsetHeight;
+    const nx=Math.min(x, window.innerWidth - w - 8);
+    const ny=Math.min(y, window.innerHeight - h - 8);
+    ctxMenuEl.style.left = nx+'px';
+    ctxMenuEl.style.top = ny+'px';
+  }
+  function hideCtxMenu(){ if(ctxMenuEl) ctxMenuEl.style.display='none'; }
+
+  function openEditEmployee(id){
+    const emp = empById(id); if(!emp) return;
+    const opts=(state.config.roles||[]).map(r=>`<option value='${r.id}' ${emp.cargo===r.id?'selected':''}>${r.label}</option>`).join('');
+    showModal('Editar empleado', `
+      <div class='row'><input id='eNombre' value='${emp.nombre}'/></div>
+      <div class='row'><input id='eCedula' value='${emp.cedula}'/></div>
+      <div class='row'><label><input type='checkbox' id='eMulti' ${emp.multicargo?'checked':''}/> Multi-cargo</label></div>
+      <div class='row'><select id='eCargo'>${opts}</select></div>
+    `, ()=>{
+      emp.nombre = document.getElementById('eNombre').value.trim() || emp.nombre;
+      emp.cedula = document.getElementById('eCedula').value.trim();
+      emp.multicargo = document.getElementById('eMulti').checked;
+      emp.cargo = document.getElementById('eCargo').value;
+      save(); renderEmployees(); renderCalendar(); return true;
+    });
+  }
+
+  function confirmDeleteEmployee(id){
+    const emp = empById(id);
+    showModal('Eliminar empleado', `
+      <p>¿Eliminar a <strong>${emp?.nombre||id}</strong>?</p>
+      <p>Se desasignarán sus turnos y se borrarán sus novedades.</p>
+    `, ()=>{
+      state.employees = state.employees.filter(e=>e.id!==id);
+      Object.keys(state.schedule).forEach(sem=>{
+        Object.keys(state.schedule[sem]).forEach(d=>{
+          ['manana','tarde'].forEach(t=>{
+            state.schedule[sem][d][t] = state.schedule[sem][d][t].filter(a=>a.id!==id);
+          });
+        });
+      });
+      state.novedades = state.novedades.filter(n=>n.id!==id);
+      save(); renderAll(); return true;
+    });
+  }
+
+  function openNuevaNovedad(id){
+    const emp = empById(id); if(!emp) return;
+    showModal('Registrar novedad', `
+      <div class='row'><select id='novTipo'>
+        <option value='descanso-remunerado'>Descanso remunerado</option>
+        <option value='descanso-no-remunerado'>Descanso no remunerado</option>
+        <option value='vacaciones'>Vacaciones</option>
+        <option value='incapacidad'>Incapacidad</option>
+      </select></div>
+      <div class='row'><input type='date' id='novInicio'/><input type='date' id='novFin'/></div>
+      <div class='row'><div id='novPagadoWrap' style='display:none'><label><input type='checkbox' id='novPagado' checked> Pagado</label></div></div>
+      <div class='row small'>Empleado: <strong>${emp.nombre}</strong></div>
+    `, ()=>{
+      const tipo=document.getElementById('novTipo').value;
+      const inicio=document.getElementById('novInicio').value; const fin=document.getElementById('novFin').value;
+      const pagado=document.getElementById('novPagado')?.checked||false;
+      if(!inicio||!fin){ notify('Fechas requeridas'); return false; }
+       Object.keys(state.schedule[semanaMostrada]).forEach(d=>{ ['manana','tarde'].forEach(t=>{ state.schedule[semanaMostrada][d][t]=state.schedule[semanaMostrada][d][t].filter(a=>a.id!==emp.id); })});
+       state.novedades.push({id:emp.id, tipo, inicio, fin, obs:'', pagado});
+       save(); renderCalendar(); renderHistorial(); renderEmployees(); return true;
+    });
+    const tipoSel=document.getElementById('novTipo'); const wrap=document.getElementById('novPagadoWrap');
+    const toggle=()=>{ wrap.style.display = tipoSel.value.includes('descanso') ? 'block' : 'none'; };
+    tipoSel.onchange=toggle; toggle();
+  }
+
+  function toggleBlock(id){
+    state.blocked = state.blocked||[];
+    const idx = state.blocked.indexOf(id);
+    if(idx>-1){ state.blocked.splice(idx,1); notify('Empleado desbloqueado'); }
+    else{
+      state.blocked.push(id); notify('Empleado bloqueado manualmente');
+      Object.keys(state.schedule[semanaMostrada]).forEach(d=>{ ['manana','tarde'].forEach(t=>{ state.schedule[semanaMostrada][d][t]=state.schedule[semanaMostrada][d][t].filter(a=>a.id!==id); })});
+    }
+    save(); renderEmployees(); renderCalendar();
+  }
+
+  function getActiveNovIndex(id){ const now=hoy; return state.novedades.findIndex(n=> n.id===id && new Date(n.inicio)<=now && now<=new Date(n.fin)); }
+  function openEditNovedadIdx(idx){
+    if(idx<0) { notify('No hay novedad activa'); return; }
+    const n=state.novedades[idx]; const emp=empById(n.id);
+    showModal('Editar novedad', `
+      <div class='row'><select id='novTipo'>
+        <option value='descanso-remunerado' ${n.tipo==='descanso-remunerado'?'selected':''}>Descanso remunerado</option>
+        <option value='descanso-no-remunerado' ${n.tipo==='descanso-no-remunerado'?'selected':''}>Descanso no remunerado</option>
+        <option value='vacaciones' ${n.tipo==='vacaciones'?'selected':''}>Vacaciones</option>
+        <option value='incapacidad' ${n.tipo==='incapacidad'?'selected':''}>Incapacidad</option>
+      </select></div>
+      <div class='row'><input type='date' id='novInicio' value='${n.inicio}'/><input type='date' id='novFin' value='${n.fin}'/></div>
+      <div class='row'><div id='novPagadoWrap' style='${n.tipo.includes('descanso')?'':'display:none'}'><label><input type='checkbox' id='novPagado' ${n.pagado?'checked':''}> Pagado</label></div></div>
+      <div class='row'><textarea id='novObs' placeholder='Observaciones...'>${n.obs||''}</textarea></div>
+      <div class='row small'>Empleado: <strong>${emp?.nombre||n.id}</strong></div>
+    `, ()=>{
+      const tipo=document.getElementById('novTipo').value;
+      const inicio=document.getElementById('novInicio').value; const fin=document.getElementById('novFin').value;
+      const pagado=document.getElementById('novPagado')?.checked||false; const obs=document.getElementById('novObs').value||'';
+      if(!inicio||!fin){ notify('Fechas requeridas'); return false; }
+      Object.keys(state.schedule[semanaMostrada]).forEach(d=>{ ['manana','tarde'].forEach(t=>{ state.schedule[semanaMostrada][d][t]=state.schedule[semanaMostrada][d][t].filter(a=>a.id!==n.id); })});
+      n.tipo=tipo; n.inicio=inicio; n.fin=fin; n.obs=obs; n.pagado=tipo.includes('descanso')?pagado:false;
+      save(); renderCalendar(); renderHistorial(); renderEmployees(); return true;
+    });
+    const tipoSel=document.getElementById('novTipo'); const wrap=document.getElementById('novPagadoWrap');
+    const toggle=()=>{ wrap.style.display = tipoSel.value.includes('descanso') ? 'block' : 'none'; };
+    tipoSel.onchange=toggle; toggle();
+  }
+  function deleteNovedadIdx(idx){
+    if(idx<0) { notify('No hay novedad activa'); return; }
+    const n=state.novedades[idx]; const emp=empById(n.id);
+    showModal('Eliminar novedad', `
+      <p>¿Eliminar novedad de <strong>${emp?.nombre||n.id}</strong>?</p>
+      <p>${fmtFecha(n.inicio)} → ${fmtFecha(n.fin)} — ${n.tipo}</p>
+    `, ()=>{
+      state.novedades.splice(idx,1);
+      save(); renderCalendar(); renderHistorial(); renderEmployees(); return true;
+    });
+  }
+
+  // Navegación semanal
+   function ensureWeekStructure(){ if(!state.schedule[semanaMostrada]) state.schedule[semanaMostrada]=baseSemana(); }
+   function setWeekByDate(date){ const dd=new Date(date); dd.setHours(0,0,0,0); fechaReferencia=dd; semanaMostrada=getWeekKey(dd); ensureWeekStructure(); renderAll(); }
+   function shiftWeek(delta){ const dd=new Date(fechaReferencia); dd.setDate(dd.getDate() + (delta*7)); setWeekByDate(dd); }
+   function initWeekNav(){
+     const prev=document.getElementById('prevWeek');
+     const next=document.getElementById('nextWeek');
+     const today=document.getElementById('goToday');
+     const date=document.getElementById('weekDate');
+     if(prev) prev.onclick=()=>shiftWeek(-1);
+     if(next) next.onclick=()=>shiftWeek(1);
+     if(today) today.onclick=()=>setWeekByDate(hoy);
+     if(date) date.onchange=(e)=>{ const v=e.target.value; if(v) setWeekByDate(new Date(v)); };
+   }
+
+   autosave(); renderAll(); initCtxMenu(); initWeekNav();
+   </script>
+ </body>
+ </html>

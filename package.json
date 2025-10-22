@@ -1,0 +1,50 @@
+{
+  "name": "sistema-gestor-turnos",
+  "version": "1.0.0",
+  "description": "Sistema de Gestión de Turnos - Aplicación de escritorio Windows",
+  "main": "main.js",
+  "author": "Panadería XYZ",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "icon": "node scripts/make-icon.js",
+    "dist": "npm run icon && electron-builder --win nsis",
+    "dist:portable": "npm run icon && electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^29.1.4",
+    "electron-builder": "^24.6.4",
+    "png-to-ico": "^2.1.8"
+  },
+  "build": {
+    "appId": "com.panaderia.turnos",
+    "productName": "Sistema de Gestión de Turnos",
+    "files": [
+      "index.html",
+      "instrucciones.txt",
+      "main.js",
+      "preload.js",
+      "build/icon.ico"
+    ],
+    "directories": {
+      "buildResources": "build"
+    },
+    "asar": true,
+    "icon": "build/icon.ico",
+    "compression": "normal",
+    "win": {
+      "target": "nsis",
+      "artifactName": "GestorTurnos-${version}-Setup.exe",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": "always",
+      "shortcutName": "Gestor turnos"
+    },
+    "portable": {
+      "artifactName": "GestorTurnos-${version}-Portable.exe"
+    }
+  }
+}

@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Turnos</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 20px;
+            height: calc(100vh - 40px);
+        }
+
+        .sidebar {
+            background: white;
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            overflow-y: auto;
+        }
+
+        .sidebar h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .employee {
+            padding: 12px 16px;
+            margin-bottom: 10px;
+            border-radius: 12px;
+            cursor: move;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            color: white;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .employee:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .employee.dragging {
+            opacity: 0.5;
+        }
+
+        .role-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.3);
+        }
+
+        /* Colores por rol */
+        .caja { background: linear-gradient(135deg, #ff8a00, #e52e71); }
+        .domicilio { background: linear-gradient(135deg, #11998e, #38ef7d); }
+        .cocina { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+        .atencion { background: linear-gradient(135deg, #f7b733, #fc4a1a); }
+        .descanso { background: linear-gradient(135deg, #2c3e50, #4ca1af); }
+
+        .calendar-container {
+            background: white;
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            overflow-y: auto;
+        }
+
+        .week-header {
+            text-align: center;
+            margin-bottom: 25px;
+            color: #333;
+        }
+
+        .week-header h1 {
+            font-size: 2em;
+            margin-bottom: 5px;
+        }
+
+        .calendar {
+            display: grid;
+            gap: 15px;
+        }
+
+        .day-card {
+            background: #f8f9fa;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+
+        .day-card:hover {
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .day-header {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 15px 20px;
+            font-weight: 600;
+            font-size: 1.1em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .day-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1px;
+            background: #e0e0e0;
+        }
+
+        .shift {
+            background: white;
+            padding: 15px;
+            min-height: 100px;
+            position: relative;
+        }
+
+        .shift-title {
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .shift.drag-over {
+            background: #e3f2fd;
+            border: 2px dashed #2196f3;
+        }
+
+        .assigned-employee {
+            padding: 8px 12px;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            color: white;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: move;
+            transition: all 0.2s ease;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .assigned-employee:hover {
+            transform: translateX(5px);
+        }
+
+        .remove-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .remove-btn:hover {
+            background: rgba(255,255,255,0.4);
+            transform: scale(1.1);
+        }
+
+        .legend {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .legend-color {
+            width: 30px;
+            height: 20px;
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h2>👥 Empleados</h2>
+            <div id="employeeList">
+                <div class="employee caja" draggable="true" data-name="ALEJANDRA" data-role="caja">
+                    <span class="role-indicator"></span>
+                    ALEJANDRA
+                </div>
+                <div class="employee cocina" draggable="true" data-name="ESTEFANIA" data-role="cocina">
+                    <span class="role-indicator"></span>
+                    ESTEFANIA
+                </div>
+                <div class="employee atencion" draggable="true" data-name="MONICA" data-role="atencion">
+                    <span class="role-indicator"></span>
+                    MONICA
+                </div>
+                <div class="employee domicilio" draggable="true" data-name="YAMILETH" data-role="domicilio">
+                    <span class="role-indicator"></span>
+                    YAMILETH
+                </div>
+                <div class="employee cocina" draggable="true" data-name="GYANNELLA" data-role="cocina">
+                    <span class="role-indicator"></span>
+                    GYANNELLA
+                </div>
+                <div class="employee atencion" draggable="true" data-name="RICARDO" data-role="atencion">
+                    <span class="role-indicator"></span>
+                    RICARDO
+                </div>
+                <div class="employee domicilio" draggable="true" data-name="YURANI" data-role="domicilio">
+                    <span class="role-indicator"></span>
+                    YURANI
+                </div>
+                <div class="employee cocina" draggable="true" data-name="DIANA" data-role="cocina">
+                    <span class="role-indicator"></span>
+                    DIANA
+                </div>
+            </div>
+
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color caja"></div>
+                    <span>Caja</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color domicilio"></div>
+                    <span>Domicilio</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color cocina"></div>
+                    <span>Cocina</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color atencion"></div>
+                    <span>Atención</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color descanso"></div>
+                    <span>Descanso</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="calendar-container">
+            <div class="week-header">
+                <h1>📅 Semana 43</h1>
+                <p>Gestión de Turnos</p>
+            </div>
+
+            <div class="calendar" id="calendar">
+                <div class="day-card">
+                    <div class="day-header">
+                        <span>Lunes 20</span>
+                    </div>
+                    <div class="day-content">
+                        <div class="shift" data-day="lunes" data-shift="mañana">
+                            <div class="shift-title">🌅 Mañana</div>
+                        </div>
+                        <div class="shift" data-day="lunes" data-shift="tarde">
+                            <div class="shift-title">🌆 Tarde</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="day-card">
+                    <div class="day-header">
+                        <span>Martes 21</span>
+                    </div>
+                    <div class="day-content">
+                        <div class="shift" data-day="martes" data-shift="mañana">
+                            <div class="shift-title">🌅 Mañana</div>
+                        </div>
+                        <div class="shift" data-day="martes" data-shift="tarde">
+                            <div class="shift-title">🌆 Tarde</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="day-card">
+                    <div class="day-header">
+                        <span>Miércoles 22</span>
+                    </div>
+                    <div class="day-content">
+                        <div class="shift" data-day="miercoles" data-shift="mañana">
+                            <div class="shift-title">🌅 Mañana</div>
+                        </div>
+                        <div class="shift" data-day="miercoles" data-shift="tarde">
+                            <div class="shift-title">🌆 Tarde</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="day-card">
+                    <div class="day-header">
+                        <span>Jueves 23</span>
+                    </div>
+                    <div class="day-content">
+                        <div class="shift" data-day="jueves" data-shift="mañana">
+                            <div class="shift-title">🌅 Mañana</div>
+                        </div>
+                        <div class="shift" data-day="jueves" data-shift="tarde">
+                            <div class="shift-title">🌆 Tarde</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="day-card">
+                    <div class="day-header">
+                        <span>Viernes 24</span>
+                    </div>
+                    <div class="day-content">
+                        <div class="shift" data-day="viernes" data-shift="mañana">
+                            <div class="shift-title">🌅 Mañana</div>
+                        </div>
+                        <div class="shift" data-day="viernes" data-shift="tarde">
+                            <div class="shift-title">🌆 Tarde</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="day-card">
+                    <div class="day-header">
+                        <span>Sábado 25</span>
+                    </div>
+                    <div class="day-content">
+                        <div class="shift" data-day="sabado" data-shift="mañana">
+                            <div class="shift-title">🌅 Mañana</div>
+                        </div>
+                        <div class="shift" data-day="sabado" data-shift="tarde">
+                            <div class="shift-title">🌆 Tarde</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="day-card">
+                    <div class="day-header">
+                        <span>Domingo 26</span>
+                    </div>
+                    <div class="day-content">
+                        <div class="shift" data-day="domingo" data-shift="mañana">
+                            <div class="shift-title">🌅 Mañana</div>
+                        </div>
+                        <div class="shift" data-day="domingo" data-shift="tarde">
+                            <div class="shift-title">🌆 Tarde</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let draggedElement = null;
+        let scheduleData = {};
+
+        // Inicializar empleados arrastrables
+        const employees = document.querySelectorAll('.employee');
+        employees.forEach(emp => {
+            emp.addEventListener('dragstart', handleDragStart);
+            emp.addEventListener('dragend', handleDragEnd);
+        });
+
+        // Inicializar zonas de destino
+        const shifts = document.querySelectorAll('.shift');
+        shifts.forEach(shift => {
+            shift.addEventListener('dragover', handleDragOver);
+            shift.addEventListener('drop', handleDrop);
+            shift.addEventListener('dragleave', handleDragLeave);
+        });
+
+        function handleDragStart(e) {
+            draggedElement = this;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', this.innerHTML);
+        }
+
+        function handleDragEnd(e) {
+            this.classList.remove('dragging');
+        }
+
+        function handleDragOver(e) {
+            if (e.preventDefault) {
+                e.preventDefault();
+            }
+            e.dataTransfer.dropEffect = 'move';
+            this.classList.add('drag-over');
+            return false;
+        }
+
+        function handleDragLeave(e) {
+            this.classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            if (e.stopPropagation) {
+                e.stopPropagation();
+            }
+            this.classList.remove('drag-over');
+
+            if (draggedElement) {
+                const name = draggedElement.dataset.name;
+                const role = draggedElement.dataset.role;
+                const day = this.dataset.day;
+                const shift = this.dataset.shift;
+
+                // Crear elemento asignado
+                const assignedEmp = document.createElement('div');
+                assignedEmp.className = `assigned-employee ${role}`;
+                assignedEmp.draggable = true;
+                assignedEmp.dataset.name = name;
+                assignedEmp.dataset.role = role;
+                assignedEmp.innerHTML = `
+                    <span>${name}</span>
+                    <button class="remove-btn" onclick="removeEmployee(this)">×</button>
+                `;
+
+                // Agregar eventos de arrastre para reasignar
+                assignedEmp.addEventListener('dragstart', function(e) {
+                    draggedElement = this;
+                    this.style.opacity = '0.5';
+                });
+
+                assignedEmp.addEventListener('dragend', function(e) {
+                    this.style.opacity = '1';
+                    this.remove();
+                });
+
+                this.appendChild(assignedEmp);
+
+                // Guardar en datos
+                if (!scheduleData[day]) scheduleData[day] = {};
+                if (!scheduleData[day][shift]) scheduleData[day][shift] = [];
+                scheduleData[day][shift].push({name, role});
+            }
+
+            return false;
+        }
+
+        function removeEmployee(btn) {
+            const empElement = btn.parentElement;
+            empElement.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => {
+                empElement.remove();
+            }, 300);
+        }
+    </script>
+</body>
+</html>
